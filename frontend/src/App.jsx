@@ -1,249 +1,261 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import myPosterImage1 from './assets/SE1.jpg';
+import myPosterImage2 from './assets/SE2.jpg'
+import myPosterImage3 from './assets/SE3.jpg'
+import myPosterImage4 from './assets/SE4.jpg'
+// 백엔드 주소 (로컬: http://localhost:5000/api/todos)
+const API_URL = 'http://localhost:5000/api/todos';
 
 const MOVIES = [
-  { id: 1, title: '어벤져스: 엔드게임', poster: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400&h=600&fit=crop', age: '12', description: '인류의 절반이 사라진 후, 남은 어벤져스 멤버들이 타노스와 벌이는 최후의 전쟁.' },
-  { id: 2, title: '기생충 (Parasite)', poster: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=400&h=600&fit=crop', age: '15', description: '전원 백수 가족인 기택네 장남 기우가 고액 과외 면접을 가며 시작되는 걷잡을 수 없는 사건.' },
-  { id: 3, title: '인터스텔라 (Interstellar)', poster: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?q=80&w=400&h=600&fit=crop', age: 'All', description: '붕괴해가는 지구를 대신할 인류의 새로운 터전을 찾아 광활한 우주로 떠나는 탐험가들의 이야기.' },
+  { id: 1, title: '컴퓨터네트워크', age: '19+', desc: '논리 설계 종강 후, 다시 설계를 위한 대학생들의 사투.', poster: myPosterImage1 },
+  { id: 2, title: '네트워크프로그래밍', age: '19+', desc: '컴퓨터공학과 학생이 3학년으로 올라가며 시작되는 강의.', poster: myPosterImage2 },
+  { id: 3, title: '소프트웨어공학', age: '19+', desc: '소프트웨어 공학을 학습할 새로운 터전을 찾아 55516으로 떠나는 이야기.', poster: myPosterImage3 },
+  { id: 4, title: '알고리즘', age: '19+', desc: '문제를 팀원들과 어떻게 해결할지 토론을 하는 거대한 논쟁.', poster: myPosterImage4 },
 ];
 
-function App() {
-  const [step, setStep] = useState('movie'); 
-  const [selectedMovie, setSelectedMovie] = useState('');
-  const [myReservations, setMyReservations] = useState([]); 
-  const [selectedSeats, setSelectedSeats] = useState([]); 
-  const [counts, setCounts] = useState({ adult: 0, teen: 0, child: 0 });
+const App = () => {
+  const [view, setView] = useState('movie');
+  const [selectedMovie, setSelectedMovie] = useState(null);
+  const [myReservations, setMyReservations] = useState([]);
+  const [counts, setCounts] = useState({ professor: 0, p_student: 0, colleger: 0 });
+  const [selectedSeats, setSelectedSeats] = useState([]);
 
-  const API_URL = 'http://localhost:5000/api/todos';
-
-  const fetchData = async () => {
+  // 1. GET: 데이터 불러오기
+  const fetchHistory = async () => {
     try {
       const res = await axios.get(API_URL);
       setMyReservations(res.data);
-    } catch (err) { console.error("데이터 로딩 실패:", err); }
-  };
-
-  useEffect(() => { fetchData(); }, []);
-
-  const currentMovieReservedSeats = myReservations.reduce((acc, item) => {
-    if (item.title && item.title.includes(selectedMovie)) {
-      const match = item.title.match(/SEATS:\[(.*?)\]/);
-      if (match) {
-        const seats = match[1].split(',').map(s => s.trim());
-        return [...acc, ...seats];
-      }
-    }
-    return acc;
-  }, []);
-
-  const handleMovieSelect = (title) => {
-    setSelectedMovie(title);
-    setSelectedSeats([]);
-    setCounts({ adult: 0, teen: 0, child: 0 });
-    setStep('seat');
-  };
-
-  const handleSeatClick = (seatId) => {
-    if (currentMovieReservedSeats.includes(seatId)) return;
-    if (selectedSeats.includes(seatId)) {
-      setSelectedSeats(selectedSeats.filter(s => s !== seatId));
-    } else {
-      setSelectedSeats([...selectedSeats, seatId]);
+    } catch (err) {
+      console.error("데이터 로드 실패", err);
     }
   };
 
-  const updateCount = (type, val) => {
-    const totalSelected = selectedSeats.length;
-    const currentTotal = counts.adult + counts.teen + counts.child;
-    if (val > 0 && currentTotal >= totalSelected) return;
-    setCounts({ ...counts, [type]: Math.max(0, counts[type] + val) });
+  useEffect(() => { fetchHistory(); }, []);
+
+  const totalPeople = counts.professor + counts.p_student + counts.colleger;
+  const totalPrice = (counts.professor * 15000) + (counts.p_student * 12000) + (counts.colleger * 8000);
+
+  const safeParse = (str) => {
+    try { return JSON.parse(str); } catch (e) { return null; }
   };
 
-  const handleReserve = async () => {
-    const total = counts.adult + counts.teen + counts.child;
-    if (total !== selectedSeats.length || total === 0) {
-      alert("좌석 수와 인원 수를 정확히 맞춰주세요.");
-      return;
-    }
+  const getReservedSeats = () => {
+    if (!selectedMovie) return [];
+    return myReservations
+      .filter(res => {
+        const data = safeParse(res.title);
+        return data && data.movieTitle === selectedMovie.title && !res.completed;
+      })
+      .flatMap(res => safeParse(res.title)?.seats || []);
+  };
+
+  // 2. POST: 예매하기
+  const handlePayment = async () => {
+    const info = {
+      movieTitle: selectedMovie.title,
+      poster: selectedMovie.poster,
+      age: selectedMovie.age,
+      seats: selectedSeats,
+      price: totalPrice,
+      date: new Date().toLocaleString()
+    };
+    
     try {
-      const seatStr = selectedSeats.sort().join(',');
-      const peopleStr = `성인:${counts.adult}, 청소년:${counts.teen}, 유아:${counts.child}`;
-      const combinedTitle = `MOVIE:${selectedMovie} :: SEATS:[${seatStr}] :: INFO:${peopleStr}`;
-
-      await axios.post(API_URL, { title: combinedTitle, completed: false });
-      alert("🎉 예약이 완료되었습니다!");
-      fetchData(); 
-      setStep('confirm'); 
-    } catch (err) { alert("예약 실패"); }
-  };
-
-  const handleToggleStatus = async (id, currentStatus) => {
-    try {
-      await axios.put(`${API_URL}/${id}`, { completed: !currentStatus });
-      fetchData();
-    } catch (err) { console.error("업데이트 실패:", err); }
-  };
-
-  const handleDelete = async (id) => {
-    if(confirm('정말 예약을 취소하시겠습니까?')) {
-      try {
-        await axios.delete(`${API_URL}/${id}`);
-        fetchData();
-      } catch (err) { console.error("삭제 실패:", err); }
+      const res = await axios.post(API_URL, { title: JSON.stringify(info), completed: false });
+      
+      setMyReservations(prev => [res.data, ...prev]); 
+      
+      alert("예매가 완료되었습니다! 🎉");
+      setView('history');
+    } catch (err) { 
+      alert("서버 연결 실패!"); 
     }
   };
+  // 3. PUT: 취소하기
+  const cancelReservation = async (id) => {
+    if (!window.confirm("예매를 취소하시겠습니까?")) return;
+    try {
+      const res = await axios.put(`${API_URL}/${id}`, { completed: true });
+      setMyReservations(prev => prev.map(item => item._id === id ? res.data : item));
+    } catch (err) { alert("취소 실패"); }
+  };
 
-  const rows = ['A','B','C','D','E','F','G','H','I'];
-  const cols = [1,2,3,4,5,6,7,8,9,10,11,12];
+  // 4. DELETE: 내역 삭제
+  const deleteReservation = async (id) => {
+    if (!window.confirm("내역을 완전히 삭제하시겠습니까?")) return;
+    try {
+      await axios.delete(`${API_URL}/${id}`);
+      setMyReservations(prev => prev.filter(item => item._id !== id));
+    } catch (err) { alert("삭제 실패"); }
+  };
+
+  // --- UI Components ---
+  const MovieCard = ({ movie }) => {
+    const [isHover, setIsHover] = useState(false);
+    return (
+      <div style={styles.movieCard} onMouseEnter={() => setIsHover(true)} onMouseLeave={() => setIsHover(false)} 
+           onClick={() => { setSelectedMovie(movie); setCounts({professor:0,p_student:0,colleger:0}); setSelectedSeats([]); setView('seat'); }}>
+        <div style={styles.posterWrapper}>
+          <img src={movie.poster} alt={movie.title} style={{...styles.posterImg, transform: isHover ? 'scale(1.05)' : 'scale(1)'}} />
+          <span style={{...styles.ageBadge, backgroundColor: movie.age === 'All' ? '#2ecc71' : '#fbba00'}}>{movie.age}</span>
+          <div style={{...styles.hoverOverlay, opacity: isHover ? 1 : 0}}>
+            <p style={styles.hoverDesc}>{movie.desc}</p>
+            <button style={styles.hoverReserveBtn}>예매하기</button>
+          </div>
+        </div>
+        <div style={styles.movieInfo}><h3 style={styles.movieTitle}>{movie.title}</h3><p style={styles.moviePrice}>15,000원 ~</p></div>
+      </div>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans selection:bg-amber-500">
-      <header className="py-12 flex flex-col items-center border-b border-zinc-800 bg-zinc-950 sticky top-0 z-50 shadow-2xl">
-        <h1 className="text-5xl font-black tracking-[0.2em] uppercase cursor-pointer transition-colors hover:text-amber-400" onClick={() => setStep('movie')}>
-          CINEMA RESERVE
-        </h1>
-        <button onClick={() => setStep('confirm')} className="mt-8 text-sm font-black bg-amber-400 text-black px-12 py-3 rounded-full hover:bg-white hover:scale-105 transition-all uppercase shadow-lg shadow-amber-400/20">
-          Check My Tickets
-        </button>
-      </header>
+    <div style={{fontFamily: 'sans-serif'}}>
+      {/* 1. 영화 목록 뷰 */}
+      {view === 'movie' && (
+        <div style={styles.darkBg}>
+          <header style={styles.listHeader}>
+            <h2 style={{fontSize: '32px', margin: 0}}>🎬 BOX OFFICE</h2>
+            <button style={styles.historyNavBtn} onClick={() => setView('history')}>나의 예매내역 🎫</button>
+          </header>
+          <div style={styles.movieGrid}>{MOVIES.map(m => <MovieCard key={m.id} movie={m} />)}</div>
+        </div>
+      )}
 
-      <main className="max-w-7xl mx-auto px-10 pb-40 flex flex-col items-center">
-        
-        {step === 'movie' && (
-          <div className="mt-24 flex flex-col gap-14">
-            {MOVIES.map(movie => (
-              <div key={movie.id} onClick={() => handleMovieSelect(movie.title)} 
-                className="group cursor-pointer flex items-center bg-zinc-900 hover:bg-zinc-800 rounded-[2rem] border-2 border-zinc-800 hover:border-amber-400 w-[850px] h-[350px] transition-all duration-300 overflow-hidden shadow-2xl">
-                <div className="w-[240px] h-full overflow-hidden border-r-2 border-zinc-800">
-                  <img src={movie.poster} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt=""/>
-                </div>
-                <div className="flex-1 p-14">
-                  <span className="text-sm bg-amber-400 text-black px-4 py-1.5 rounded-full font-black uppercase tracking-wider">Age {movie.age}</span>
-                  <h3 className="text-5xl font-black mt-6 group-hover:text-amber-400 transition-colors leading-tight">{movie.title}</h3>
-                  <p className="text-zinc-400 mt-6 text-lg leading-relaxed line-clamp-2">{movie.description}</p>
+      {/* 2. 좌석 선택 뷰 */}
+      {view === 'seat' && (
+        <div style={styles.seatContainer}>
+          <header style={styles.seatHeader}>
+            <div style={styles.movieInfoMini}><span style={styles.ageBadgeSmall}>{selectedMovie?.age}</span><strong>{selectedMovie?.title}</strong></div>
+            <button style={styles.closeBtn} onClick={() => setView('movie')}>✕</button>
+          </header>
+          <div style={styles.countSelectionArea}>
+            {['professor', 'p_student', 'colleger'].map(t => (
+              <div key={t} style={styles.countBox}>
+                <span style={styles.countLabel}>{t === 'professor' ? '교수님' : t === 'p_student' ? '대학원생' : '대학생'}</span>
+                <div style={styles.counter}>
+                  <button style={styles.countBtn} onClick={() => {const n = Math.max(0, counts[t]-1); setCounts({...counts, [t]:n}); if(selectedSeats.length > (totalPeople-1)) setSelectedSeats([]);}}>-</button>
+                  <span style={styles.countNum}>{counts[t]}</span>
+                  <button style={styles.countBtn} onClick={() => setCounts({...counts, [t]:counts[t]+1})}>+</button>
                 </div>
               </div>
             ))}
           </div>
-        )}
-
-        {step === 'seat' && (
-          <div className="mt-24 w-full max-w-5xl p-16 bg-zinc-900 rounded-[3rem] border-2 border-zinc-800 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-            <h2 className="text-4xl font-black text-center mb-16 text-amber-400 tracking-tight uppercase italic underline decoration-zinc-700 underline-offset-8">{selectedMovie}</h2>
-            
-            <div className="flex flex-col gap-6 mb-16">
-              <div className="flex flex-col items-center mb-10">
-                <div className="w-full h-2 bg-zinc-800 rounded-full mb-4 shadow-[0_0_15px_rgba(255,255,255,0.05)]"></div>
-                <div className="bg-zinc-800 px-20 py-2 rounded-b-3xl border-x border-b border-zinc-700">
-                    <span className="text-zinc-400 font-black tracking-[1.5em] uppercase text-xs pl-[1.5em]">SCREEN</span>
-                </div>
+          <div style={styles.screenArea}><div style={styles.screenLine}>SCREEN</div></div>
+          <div style={styles.seatGrid}>
+            {['A', 'B', 'C'].map(row => (
+              <div key={row} style={styles.seatRow}>
+                <span style={styles.rowLabel}>{row}</span>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(col => {
+                  const sid = `${row}${col}`, isS = selectedSeats.includes(sid), isR = getReservedSeats().includes(sid);
+                  return <div key={col} onClick={() => { if(isR) return; if(isS) setSelectedSeats(selectedSeats.filter(s=>s!==sid)); else if(selectedSeats.length < totalPeople) setSelectedSeats([...selectedSeats, sid]);}}
+                          style={{...styles.seatIcon, backgroundColor: isR ? '#555' : (isS ? '#e71a0f' : '#333'), cursor: isR ? 'default' : 'pointer'}}>{col}</div>;
+                })}
               </div>
-
-              {rows.map(row => (
-                <div key={row} className="flex justify-center gap-3 items-center">
-                  <span className="w-10 text-zinc-600 text-xl font-black">{row}</span>
-                  {cols.map(col => {
-                    const id = row + col;
-                    const isReserved = currentMovieReservedSeats.includes(id);
-                    const isSelected = selectedSeats.includes(id);
-                    return (
-                      <button 
-                        key={id} 
-                        disabled={isReserved} 
-                        onClick={() => handleSeatClick(id)} 
-                        style={{ backgroundColor: isSelected ? '#fbbf24' : '' }} // 인라인 스타일로 노란색 강제
-                        className={`w-12 h-12 rounded-xl text-xs font-black border-2 transition-all duration-200 flex items-center justify-center
-                        ${isReserved 
-                          ? 'bg-zinc-950 border-zinc-900 text-zinc-800 cursor-not-allowed' 
-                          : isSelected 
-                            ? 'border-amber-400 text-black scale-110 shadow-[0_0_20px_rgba(251,191,36,0.6)] cursor-pointer' 
-                            : 'bg-zinc-800 border-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-white cursor-pointer'
-                        }`}
-                      >
-                        {col}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-
-            {selectedSeats.length > 0 && (
-              <div className="flex flex-col items-center gap-10 mb-16 py-12 border-y-2 border-zinc-800">
-                <div className="flex gap-16">
-                  {['adult', 'teen', 'child'].map(type => (
-                    <div key={type} className="flex flex-col items-center gap-5">
-                      <span className="text-sm font-black text-zinc-500 uppercase tracking-widest">{type === 'adult' ? '성인' : type === 'teen' ? '청소년' : '유아'}</span>
-                      <div className="flex items-center gap-6 bg-black px-6 py-3 rounded-2xl border-2 border-zinc-800">
-                        <button onClick={() => updateCount(type, -1)} className="text-3xl font-light hover:text-amber-400 cursor-pointer">-</button>
-                        <span className="text-3xl font-black w-10 text-center">{counts[type]}</span>
-                        <button onClick={() => updateCount(type, 1)} className="text-3xl font-light hover:text-amber-400 cursor-pointer">+</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-amber-400 font-black text-xl tracking-tighter italic">Total {selectedSeats.length} Seats Selected</p>
-              </div>
-            )}
-            
-            <div className="text-center">
-              <button onClick={handleReserve} 
-                className={`px-24 py-6 rounded-2xl font-black text-2xl transition-all shadow-2xl
-                ${selectedSeats.length > 0 && (counts.adult + counts.teen + counts.child === selectedSeats.length) 
-                ? 'bg-amber-400 text-black cursor-pointer hover:scale-105 shadow-amber-400/20' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}>
-                COMPLETE RESERVATION
-              </button>
-            </div>
+            ))}
           </div>
-        )}
+          <footer style={styles.paymentBar}>
+            <div style={styles.paymentInner}>
+              <div style={styles.priceContainer}><span style={styles.priceLabel}>좌석: {selectedSeats.join(', ') || '미선택'}</span><span style={styles.priceNum}>{totalPrice.toLocaleString()}원</span></div>
+              <button style={{...styles.payBtn, opacity: (totalPeople > 0 && selectedSeats.length === totalPeople) ? 1 : 0.5}} disabled={!(totalPeople > 0 && selectedSeats.length === totalPeople)} onClick={handlePayment}>결제하기</button>
+            </div>
+          </footer>
+        </div>
+      )}
 
-        {step === 'confirm' && (
-          <div className="mt-24 w-full max-w-4xl space-y-10 text-left">
-            <h2 className="text-5xl font-black mb-16 italic border-b-8 border-amber-400 inline-block uppercase tracking-tighter">My Tickets</h2>
-            {myReservations.length === 0 ? (
-              <p className="text-zinc-600 py-32 text-center font-black text-2xl uppercase tracking-widest border-2 border-dashed border-zinc-800 rounded-[2rem]">No tickets found.</p>
-            ) : (
-              myReservations.map(res => {
-                const raw = res.title || "";
-                const movieTitle = raw.includes("MOVIE:") ? raw.split("MOVIE:")[1].split(" ::")[0] : "정보 없음";
-                const seatInfo = raw.includes("SEATS:[") ? raw.split("SEATS:[")[1].split("]")[0] : "좌석 없음";
-                const peopleInfo = raw.includes("INFO:") ? raw.split("INFO:")[1] : "";
+      // 3. 예매 내역 뷰 부분 찾기
+      {view === 'history' && (
+        <div style={styles.lightBg}>
+          <div style={styles.historyHeader}>
+            <h2 style={{fontSize: '24px', margin: 0}}>
+              나의 예매 내역 
+              <span style={{color:'#e71a0f', marginLeft: '8px'}}>
+              {/* 🔥 핵심: 실제로 화면에 그려질(safeParse가 성공한) 데이터만 필터링해서 개수를 셉니다 */}
+                {myReservations.filter(res => safeParse(res.title) !== null).length}
+              </span>
+            </h2>
+            <button style={styles.backBtn} onClick={() => setView('movie')}>영화 목록으로</button>
+          </div>
 
-                return (
-                  <div key={res._id} className="relative bg-zinc-900 border-2 border-zinc-800 rounded-[2.5rem] overflow-hidden flex shadow-[0_20px_40px_rgba(0,0,0,0.4)] transition-transform hover:scale-[1.01]">
-                    <div className={`w-6 h-full absolute left-0 ${res.completed ? 'bg-green-500' : 'bg-amber-400'}`}></div>
-                    <div className="flex-1 pl-16 p-12 flex justify-between items-center">
-                      <div className="space-y-6">
-                        <p className="text-amber-400 font-black text-xl tracking-tight uppercase italic">🎬 {movieTitle.trim()}</p>
-                        <h4 className="text-7xl font-black tracking-tighter text-white uppercase italic leading-none">SEAT: {seatInfo}</h4>
-                        <div className="flex items-center gap-4 pt-2">
-                           <span className="text-xs text-zinc-500 font-black uppercase tracking-[0.2em]">Details:</span>
-                           <p className="text-zinc-200 text-lg font-black bg-zinc-800 px-6 py-2 rounded-full border-2 border-zinc-700">{peopleInfo.trim()}</p>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-6 items-end">
-                        <button onClick={() => handleToggleStatus(res._id, res.completed)} 
-                          className={`text-sm font-black px-8 py-3 rounded-xl border-2 transition-all shadow-lg cursor-pointer
-                          ${res.completed ? 'bg-green-600 border-green-500 text-white' : 'bg-transparent border-zinc-700 text-zinc-400 hover:text-white hover:border-amber-400'}`}>
-                          {res.completed ? '✅ CHECKED IN' : '🎟️ UNUSED'}
-                        </button>
-                        <button onClick={() => handleDelete(res._id)} className="text-zinc-600 hover:text-red-500 text-sm font-black underline decoration-2 underline-offset-4 cursor-pointer">CANCEL TICKET</button>
-                      </div>
-                    </div>
+          {/* 실제 리스트 출력 부분 */}
+          {myReservations.map(res => {
+            const data = safeParse(res.title);
+            if(!data) return null; // 데이터가 이상하면 화면에 그리지 않음 (숫자에서도 제외됨)
+              
+            return (
+              <div key={res._id} style={styles.historyCard}>
+                <img src={data.poster} style={styles.historyPoster} alt="p" />
+                <div style={styles.historyContent}>
+                  <div style={styles.historyTitle}>
+                    <span style={styles.ageBadgeSmall}>{data.age}</span> <strong>{data.movieTitle}</strong>
+                    {res.completed && <span style={styles.cancelBadge}>취소됨</span>}
                   </div>
-                );
-              })
-            )}
-            <div className="pt-20 text-center">
-              <button onClick={() => setStep('movie')} className="text-zinc-500 hover:text-white font-black text-sm uppercase tracking-[0.3em] cursor-pointer transition-colors">
-                ← Go back to movie selection
-              </button>
-            </div>
-          </div>
-        )}
-      </main>
+                  <p style={styles.historyText}>좌석: <strong>{data.seats.join(', ')}</strong></p>
+                  <p style={styles.historyText}>결제금액: {data.price.toLocaleString()}원</p>
+                  <p style={styles.historyText}>일시: {data.date}</p>
+                  <div style={{marginTop: '15px'}}>
+                    {!res.completed ? <button style={styles.textBtn} onClick={() => cancelReservation(res._id)}>예매취소</button> 
+                    : <button style={styles.deleteBtn} onClick={() => deleteReservation(res._id)}>내역 삭제</button>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
-}
+};
+
+const styles = {
+  darkBg: { backgroundColor: '#111', minHeight: '100vh', padding: '60px 20px', color: '#fff' },
+  listHeader: { display:'flex', justifyContent:'space-between', alignItems:'center', maxWidth:'1000px', margin:'0 auto 40px' },
+  historyNavBtn: { backgroundColor: '#e71a0f', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold' },
+  movieGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '30px', maxWidth: '1000px', margin: '0 auto' },
+  movieCard: { cursor: 'pointer' },
+  posterWrapper: { position: 'relative', height: '320px', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#222' },
+  posterImg: { width: '100%', height: '100%', objectFit: 'cover', transition: '0.5s' },
+  ageBadge: { position: 'absolute', top: '12px', left: '12px', color: '#000', padding: '3px 7px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', zIndex: 10 },
+  hoverOverlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', transition: '0.3s', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '20px', textAlign: 'center' },
+  hoverDesc: { color: '#ddd', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' },
+  hoverReserveBtn: { backgroundColor: '#e71a0f', color: '#fff', border: 'none', padding: '10px 25px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' },
+  movieInfo: { marginTop: '15px', textAlign: 'center' },
+  movieTitle: { fontSize: '18px', fontWeight: 'bold' },
+  moviePrice: { fontSize: '14px', color: '#888' },
+  seatContainer: { backgroundColor: '#000', minHeight: '100vh', color: '#fff' },
+  seatHeader: { backgroundColor: '#fff', color: '#000', padding: '15px 30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  movieInfoMini: { display: 'flex', alignItems: 'center', gap: '10px' },
+  ageBadgeSmall: { backgroundColor: '#fbba00', padding: '2px 4px', borderRadius: '3px', fontSize: '11px', fontWeight: 'bold' },
+  closeBtn: { background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' },
+  countSelectionArea: { display: 'flex', justifyContent: 'center', gap: '30px', padding: '20px', borderBottom: '1px solid #222' },
+  countBox: { display: 'flex', alignItems: 'center', gap: '8px' },
+  countLabel: { fontSize: '13px', color: '#aaa' },
+  counter: { display: 'flex', alignItems: 'center', border: '1px solid #444', borderRadius: '4px' },
+  countBtn: { width: '30px', height: '30px', backgroundColor: '#222', color: '#fff', border: 'none', cursor: 'pointer' },
+  countNum: { width: '30px', textAlign: 'center' },
+  screenArea: { margin: '30px auto', width: '50%', textAlign: 'center' },
+  screenLine: { borderTop: '2px solid #444', color: '#444', paddingTop: '5px', fontSize: '11px', letterSpacing: '5px' },
+  seatGrid: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', paddingBottom:'150px' },
+  seatRow: { display: 'flex', alignItems: 'center', gap: '5px' },
+  rowLabel: { color: '#666', width: '20px', fontSize: '12px' },
+  seatIcon: { width: '24px', height: '24px', borderRadius: '4px', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '10px' },
+  paymentBar: { position: 'fixed', bottom: 0, width: '100%', height: '90px', backgroundColor: '#1a1a1a', display: 'flex', justifyContent: 'center', borderTop: '1px solid #333' },
+  paymentInner: { width: '100%', maxWidth: '1000px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px' },
+  priceContainer: { display: 'flex', flexDirection: 'column' },
+  priceLabel: { fontSize: '12px', color: '#888' },
+  priceNum: { color: '#e71a0f', fontSize: '24px', fontWeight: 'bold' },
+  payBtn: { backgroundColor: '#e71a0f', color: '#fff', border: 'none', padding: '12px 50px', fontSize: '18px', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' },
+  lightBg: { backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '50px 20px', color: '#333' },
+  historyHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: '800px', margin: '0 auto 30px' },
+  historyCard: { display: 'flex', gap: '20px', maxWidth: '800px', margin: '0 auto 15px', backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
+  historyPoster: { width: '100px', height: '140px', borderRadius: '4px', objectFit: 'cover' },
+  historyContent: { flex: 1 },
+  historyTitle: { fontSize: '18px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' },
+  historyText: { fontSize: '14px', color: '#666', margin: '4px 0' },
+  backBtn: { padding: '8px 15px', border: '1px solid #333', backgroundColor: '#fff', cursor: 'pointer', borderRadius: '4px' },
+  cancelBadge: { backgroundColor: '#ff4d4d', color: '#fff', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' },
+  textBtn: { background: 'none', border: 'none', color: '#e71a0f', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' },
+  deleteBtn: { backgroundColor: '#333', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' },
+};
 
 export default App;
