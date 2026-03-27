@@ -51,27 +51,29 @@ const App = () => {
   };
 
   // 2. POST: 예매하기
-  const handlePayment = async () => {
-    const info = {
-      movieTitle: selectedMovie.title,
-      poster: selectedMovie.poster,
-      age: selectedMovie.age,
-      seats: selectedSeats,
-      price: totalPrice,
-      date: new Date().toLocaleString()
-    };
-    
-    try {
-      const res = await axios.post(API_URL, { title: JSON.stringify(info), completed: false });
-      
-      setMyReservations(prev => [res.data, ...prev]); 
-      
-      alert("예매가 완료되었습니다! 🎉");
-      setView('history');
-    } catch (err) { 
-      alert("서버 연결 실패!"); 
-    }
+const handlePayment = async () => {
+  const info = {
+    movieTitle: selectedMovie.title,
+    poster: selectedMovie.poster,
+    age: selectedMovie.age,
+    seats: selectedSeats,
+    price: totalPrice,
+    date: new Date().toLocaleString()
   };
+  
+  try {
+    const res = await axios.post(API_URL, { title: JSON.stringify(info), completed: false });
+    
+    if (res.status === 200 || res.status === 201) { // 성공 응답 확인
+      setMyReservations(prev => [res.data, ...prev]); 
+      alert("예매가 완료되었습니다! 🎉");
+      setView('history'); // 👈 여기서 화면 전환
+    }
+  } catch (err) { 
+    console.error("결제 실패 상세:", err); // 브라우저 콘솔(F12)에서 에러 확인용
+    alert("서버 연결 실패! 데이터를 저장할 수 없습니다."); 
+  }
+};
   // 3. PUT: 취소하기
   const cancelReservation = async (id) => {
     if (!window.confirm("예매를 취소하시겠습니까?")) return;
