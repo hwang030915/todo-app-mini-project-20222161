@@ -5,7 +5,7 @@ import myPosterImage2 from './assets/SE2.jpg'
 import myPosterImage3 from './assets/SE3.jpg'
 import myPosterImage4 from './assets/SE4.jpg'
 // 백엔드 주소 (로컬: http://localhost:5000/api/todos)
-const API_URL = 'http://localhost:5000/api/todos';
+const API_URL = '/api/todos';
 
 const MOVIES = [
   { id: 1, title: '컴퓨터네트워크', age: '19+', desc: '논리 설계 종강 후, 다시 설계를 위한 대학생들의 사투.', poster: myPosterImage1 },
