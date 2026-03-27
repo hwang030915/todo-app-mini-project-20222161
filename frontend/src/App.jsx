@@ -50,30 +50,46 @@ const App = () => {
       .flatMap(res => safeParse(res.title)?.seats || []);
   };
 
-  // 2. POST: 예매하기
-const handlePayment = async () => {
-  const info = {
-    movieTitle: selectedMovie.title,
-    poster: selectedMovie.poster,
-    age: selectedMovie.age,
-    seats: selectedSeats,
-    price: totalPrice,
-    date: new Date().toLocaleString()
-  };
-  
-  try {
-    const res = await axios.post(API_URL, { title: JSON.stringify(info), completed: false });
+// 2. POST: 예매하기
+  const handlePayment = async () => {
+    // 1. 데이터 준비
+    const info = {
+      movieTitle: selectedMovie.title,
+      poster: selectedMovie.poster,
+      age: selectedMovie.age,
+      seats: selectedSeats,
+      price: totalPrice,
+      date: new Date().toLocaleString()
+    };
     
-    if (res.status === 200 || res.status === 201) { // 성공 응답 확인
-      setMyReservations(prev => [res.data, ...prev]); 
-      alert("예매가 완료되었습니다! 🎉");
-      setView('history'); // 👈 여기서 화면 전환
+    try {
+      // 2. 서버에 전송 (백엔드에서 title과 completed를 받으므로 구조를 맞춤)
+      const res = await axios.post(API_URL, { 
+        title: JSON.stringify(info), 
+        completed: false 
+      });
+      
+      // 3. 응답이 왔다면 상태 업데이트 및 화면 전환
+      // axios는 기본적으로 2xx가 아니면 catch로 던지므로 res가 존재하면 성공으로 간주해도 무방합니다.
+      if (res.data) {
+        setMyReservations(prev => [res.data, ...prev]); 
+        alert("예매가 완료되었습니다! 🎉");
+        
+        // 중요: 상태 초기화 후 화면 이동
+        setCounts({ professor: 0, p_student: 0, colleger: 0 });
+        setSelectedSeats([]);
+        setView('history'); 
+      }
+    } catch (err) { 
+      // 로컬/배포 환경 어디서든 에러가 나면 여기서 잡힙니다.
+      console.error("상세 에러 내용:", err.response?.data || err.message);
+      
+      // 에러가 나더라도 화면을 넘기고 싶다면 아래 주석을 해제하세요 (디버깅용)
+      // setView('history'); 
+      
+      alert("서버 통신에 문제가 발생했습니다. (데이터베이스 연결이나 IP 허용을 확인해주세요)"); 
     }
-  } catch (err) { 
-    console.error("결제 실패 상세:", err); // 브라우저 콘솔(F12)에서 에러 확인용
-    alert("서버 연결 실패! 데이터를 저장할 수 없습니다."); 
-  }
-};
+  };
   // 3. PUT: 취소하기
   const cancelReservation = async (id) => {
     if (!window.confirm("예매를 취소하시겠습니까?")) return;
