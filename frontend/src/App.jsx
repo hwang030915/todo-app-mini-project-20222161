@@ -52,7 +52,6 @@ const App = () => {
       .flatMap(res => safeParse(res.title)?.seats || []);
   };
 
-  // 2. POST: 예매하기 (핵심 수정 부분)
 const handlePayment = async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -66,33 +65,43 @@ const handlePayment = async () => {
       date: new Date().toLocaleString()
     };
 
-    // [중요] 사용자가 답답하지 않게 먼저 상태를 초기화하고 화면을 넘길 준비를 합니다.
-    const completeReservationUI = () => {
-      setCounts({ professor: 0, p_student: 0, colleger: 0 });
-      setSelectedSeats([]);
-      setView('history'); 
-      setIsSubmitting(false);
-    };
-
     try {
-      // 1. 서버에 데이터 전송 (Vercel 타임아웃 대비 5초 제한 등 설정 가능)
+      // 1. 서버에 데이터 전송 및 응답 대기
+      // 만약 백엔드가 외부 서버라면 API_URL에 전체 주소(https://...)가 적혀있어야 합니다.
       const res = await axios.post(API_URL, { 
         title: JSON.stringify(info), 
         completed: false 
-      }, { timeout: 5000 }); // 5초 넘으면 에러로 간주
+      });
 
-      if (res.data) {
-        setMyReservations(prev => [res.data, ...prev]);
-        completeReservationUI();
-        setTimeout(() => alert("예매가 완료되었습니다! 🎉"), 100);
+      // 2. 서버에서 저장된 데이터를 정상적으로 내려받았을 때만 실행
+      if (res.status === 200 || res.status === 201) {
+        const savedData = res.data;
+        
+        // 내역 리스트 최상단에 방금 예약한 데이터 추가
+        setMyReservations(prev => [savedData, ...prev]);
+        
+        // 선택 상태 초기화
+        setCounts({ professor: 0, p_student: 0, colleger: 0 });
+        setSelectedSeats([]);
+        
+        // 모든 처리가 완료된 후 화면 이동
+        setView('history');
+        setTimeout(() => alert("예매가 정상적으로 완료되었습니다! 🎟️"), 100);
       }
     } catch (err) {
-      console.error("결제 처리 중 에러 발생:", err);
+      console.error("결제 실패 상세 원인:", err);
       
-      // 2. 에러가 나더라도(서버가 응답이 없더라도) 화면은 무조건 넘깁니다.
-      // 이렇게 해야 사용자가 '처리 중'에 갇히지 않습니다.
-      alert("서버 응답이 늦어지고 있습니다. 내역 페이지에서 확인해주세요.");
-      completeReservationUI();
+      // 사용자가 상황을 알 수 있게 구체적인 에러 메시지 출력
+      if (err.code === 'ECONNABORTED') {
+        alert("서버 응답이 너무 느립니다. 잠시 후 다시 시도해주세요.");
+      } else if (err.response) {
+        alert(`서버 에러 (${err.response.status}): 데이터 저장에 실패했습니다.`);
+      } else {
+        alert("네트워크 연결을 확인해주세요. (백엔드 서버가 켜져 있는지 확인이 필요합니다)");
+      }
+    } finally {
+      // 성공하든 실패하든 버튼의 '처리 중' 상태는 해제하여 다시 시도 가능하게 함
+      setIsSubmitting(false);
     }
   };
 
