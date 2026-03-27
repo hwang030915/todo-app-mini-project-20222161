@@ -163,7 +163,7 @@ const App = () => {
         </div>
       )}
 
-      // 3. 예매 내역 뷰 부분 찾기
+      {/*3. 예매 내역 뷰 부분 찾기*/}
       {view === 'history' && (
         <div style={styles.lightBg}>
           <div style={styles.historyHeader}>
