@@ -22,19 +22,20 @@ const App = () => {
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- 추가된 Todo 관련 상태 ---
+  // --- [추가] Todo 관련 상태 ---
+  const [todos, setTodos] = useState([]);
   const [todoInput, setTodoInput] = useState('');
-  const [todoList, setTodoList] = useState([]);
 
-  // 데이터 불러오기 (영화 & Todo 통합)
+  // 1. GET: 통합 데이터 불러오기 (영화 예매와 Todo 구분)
   const fetchData = async () => {
     try {
       const res = await axios.get(API_URL);
-      // 영화 예매 데이터와 일반 Todo를 분리하여 저장
-      const movies = res.data.filter(item => item.title.startsWith('{'));
-      const todos = res.data.filter(item => !item.title.startsWith('{'));
+      // title이 '{'로 시작하면 영화 예매 데이터, 아니면 Todo 데이터로 분류
+      const movies = res.data.filter(item => item.title.trim().startsWith('{'));
+      const todoItems = res.data.filter(item => !item.title.trim().startsWith('{'));
+      
       setMyReservations(movies);
-      setTodoList(todos);
+      setTodos(todoItems);
     } catch (err) {
       console.error("데이터 로드 실패", err);
     }
@@ -42,34 +43,43 @@ const App = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  // --- Todo 관련 함수들 ---
+  const totalPeople = counts.professor + counts.p_student + counts.colleger;
+  const totalPrice = (counts.professor * 15000) + (counts.p_student * 12000) + (counts.colleger * 8000);
+
+  const safeParse = (str) => {
+    try { return JSON.parse(str); } catch (e) { return null; }
+  };
+
+  // --- [Todo 기능] CRUD 로직 ---
+
+  // Todo 등록 (Create)
   const handleAddTodo = async () => {
     if (!todoInput.trim()) return;
     try {
       const res = await axios.post(API_URL, { title: todoInput, completed: false });
-      setTodoList([res.data, ...todoList]);
+      setTodos(prev => [res.data, ...prev]);
       setTodoInput('');
-    } catch (err) { alert("추가 실패"); }
+    } catch (err) { alert("할 일 등록 실패"); }
   };
 
-  const toggleTodo = async (todo) => {
+  // Todo 상태 업데이트 (Update)
+  const toggleTodo = async (id, currentStatus) => {
     try {
-      const res = await axios.put(`${API_URL}/${todo._id}`, { completed: !todo.completed });
-      setTodoList(todoList.map(t => t._id === todo._id ? res.data : t));
-    } catch (err) { alert("상태 변경 실패"); }
+      const res = await axios.put(`${API_URL}/${id}`, { completed: !currentStatus });
+      setTodos(prev => prev.map(t => t._id === id ? res.data : t));
+    } catch (err) { alert("상태 업데이트 실패"); }
   };
 
+  // Todo 삭제 (Delete)
   const deleteTodo = async (id) => {
+    if (!window.confirm("삭제하시겠습니까?")) return;
     try {
       await axios.delete(`${API_URL}/${id}`);
-      setTodoList(todoList.filter(t => t._id !== id));
+      setTodos(prev => prev.filter(t => t._id !== id));
     } catch (err) { alert("삭제 실패"); }
   };
 
-  // --- 기존 영화 예매 관련 로직 (동일) ---
-  const totalPeople = counts.professor + counts.p_student + counts.colleger;
-  const totalPrice = (counts.professor * 15000) + (counts.p_student * 12000) + (counts.colleger * 8000);
-  const safeParse = (str) => { try { return JSON.parse(str); } catch (e) { return null; } };
+  // --- [영화 예매 기능] 기존 로직 유지 ---
 
   const getReservedSeats = () => {
     if (!selectedMovie) return [];
@@ -84,6 +94,7 @@ const App = () => {
   const handlePayment = async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
+
     const info = {
       movieTitle: selectedMovie.title,
       poster: selectedMovie.poster,
@@ -92,6 +103,7 @@ const App = () => {
       price: totalPrice,
       date: new Date().toLocaleString()
     };
+
     try {
       const res = await axios.post(API_URL, { title: JSON.stringify(info), completed: false });
       if (res.status === 200 || res.status === 201) {
@@ -99,9 +111,13 @@ const App = () => {
         setCounts({ professor: 0, p_student: 0, colleger: 0 });
         setSelectedSeats([]);
         setView('history');
-        setTimeout(() => alert("예매가 완료되었습니다!"), 100);
+        setTimeout(() => alert("예매가 정상적으로 완료되었습니다! 🎟️"), 100);
       }
-    } catch (err) { alert("결제 실패"); } finally { setIsSubmitting(false); }
+    } catch (err) {
+      alert("결제 처리 중 오류가 발생했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const cancelReservation = async (id) => {
@@ -113,7 +129,7 @@ const App = () => {
   };
 
   const deleteReservation = async (id) => {
-    if (!window.confirm("내역을 삭제하시겠습니까?")) return;
+    if (!window.confirm("내역을 완전히 삭제하시겠습니까?")) return;
     try {
       await axios.delete(`${API_URL}/${id}`);
       setMyReservations(prev => prev.filter(item => item._id !== id));
@@ -123,12 +139,8 @@ const App = () => {
   const MovieCard = ({ movie }) => {
     const [isHover, setIsHover] = useState(false);
     return (
-      <div 
-        style={styles.movieCard} 
-        onMouseEnter={() => setIsHover(true)} 
-        onMouseLeave={() => setIsHover(false)} 
-        onClick={() => { setSelectedMovie(movie); setCounts({professor:0, p_student:0, colleger:0}); setSelectedSeats([]); setView('seat'); }}
-      >
+      <div style={styles.movieCard} onMouseEnter={() => setIsHover(true)} onMouseLeave={() => setIsHover(false)} 
+           onClick={() => { setSelectedMovie(movie); setCounts({professor:0, p_student:0, colleger:0}); setSelectedSeats([]); setView('seat'); }}>
         <div style={styles.posterWrapper}>
           <img src={movie.poster} alt={movie.title} style={{...styles.posterImg, transform: isHover ? 'scale(1.05)' : 'scale(1)'}} />
           <span style={{...styles.ageBadge, backgroundColor: movie.age === 'All' ? '#2ecc71' : '#fbba00'}}>{movie.age}</span>
@@ -146,18 +158,13 @@ const App = () => {
   };
 
   return (
-    <div style={{fontFamily: 'sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh'}}>
-      {/* 상단 네비게이션 */}
-      <nav style={styles.nav}>
-        <div style={styles.navInner}>
-          <h1 style={{fontSize: '20px', cursor: 'pointer'}} onClick={() => setView('movie')}>🎬 SE-MOVIE</h1>
-          <div style={{display: 'flex', gap: '20px'}}>
-            <button style={styles.navBtn} onClick={() => setView('movie')}>영화예매</button>
-            <button style={styles.navBtn} onClick={() => setView('todo')}>체크리스트</button>
-            <button style={{...styles.navBtn, color: '#e71a0f'}} onClick={() => setView('history')}>나의예매</button>
-          </div>
-        </div>
-      </nav>
+    <div style={{fontFamily: 'sans-serif'}}>
+      {/* 상단 네비게이션 탭 */}
+      <div style={styles.tabContainer}>
+        <button style={{...styles.tabBtn, borderBottom: view === 'movie' ? '3px solid #e71a0f' : 'none'}} onClick={() => setView('movie')}>영화 예매</button>
+        <button style={{...styles.tabBtn, borderBottom: view === 'todo' ? '3px solid #e71a0f' : 'none'}} onClick={() => setView('todo')}>체크리스트</button>
+        <button style={{...styles.tabBtn, borderBottom: view === 'history' ? '3px solid #e71a0f' : 'none'}} onClick={() => setView('history')}>나의 내역</button>
+      </div>
 
       {/* 1. 영화 목록 뷰 */}
       {view === 'movie' && (
@@ -208,8 +215,7 @@ const App = () => {
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(col => {
                   const sid = `${row}${col}`, isS = selectedSeats.includes(sid), isR = getReservedSeats().includes(sid);
                   return (
-                    <div 
-                      key={col} 
+                    <div key={col} 
                       onClick={() => { 
                         if(isR) return; 
                         if(isS) setSelectedSeats(selectedSeats.filter(s=>s!==sid)); 
@@ -263,6 +269,7 @@ const App = () => {
                   </div>
                   <p style={styles.historyText}>좌석: <strong>{data.seats.join(', ')}</strong></p>
                   <p style={styles.historyText}>결제금액: {data.price.toLocaleString()}원</p>
+                  <p style={styles.historyText}>일시: {data.date}</p>
                   <div style={{marginTop: '15px'}}>
                     {!res.completed ? <button style={styles.textBtn} onClick={() => cancelReservation(res._id)}>예매취소</button> 
                     : <button style={styles.deleteBtn} onClick={() => deleteReservation(res._id)}>내역 삭제</button>}
@@ -274,42 +281,33 @@ const App = () => {
         </div>
       )}
 
-      {/* 🎬 4. 새롭게 추가된 TODO LIST 뷰 */}
+      {/* 4. Todo List 뷰 */}
       {view === 'todo' && (
-        <div style={styles.todoContainer}>
+        <div style={styles.todoBg}>
           <div style={styles.todoCard}>
-            <h2 style={{color: '#e71a0f', marginBottom: '20px'}}>🍿 관람 전 체크리스트</h2>
-            <div style={styles.todoInputGroup}>
+            <h2 style={{textAlign:'center', color:'#333'}}>🍿 영화관 체크리스트</h2>
+            <div style={styles.todoInputBox}>
               <input 
                 style={styles.todoInput} 
+                placeholder="관람 전 할 일을 입력하세요" 
                 value={todoInput} 
-                onChange={(e) => setTodoInput(e.target.value)} 
-                placeholder="팝콘 사기, 안경 챙기기..."
+                onChange={(e) => setTodoInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()}
               />
               <button style={styles.todoAddBtn} onClick={handleAddTodo}>등록</button>
             </div>
             <div style={styles.todoList}>
-              {todoList.map(todo => (
-                <div key={todo._id} style={styles.todoItem}>
-                  <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                    <input 
-                      type="checkbox" 
-                      checked={todo.completed} 
-                      onChange={() => toggleTodo(todo)} 
-                      style={{cursor: 'pointer', width: '18px', height: '18px'}}
-                    />
-                    <span style={{
-                      textDecoration: todo.completed ? 'line-through' : 'none',
-                      color: todo.completed ? '#aaa' : '#333'
-                    }}>
-                      {todo.title}
+              {todos.map(t => (
+                <div key={t._id} style={styles.todoItem}>
+                  <div style={{display:'flex', alignItems:'center', gap: '10px'}}>
+                    <input type="checkbox" checked={t.completed} onChange={() => toggleTodo(t._id, t.completed)} />
+                    <span style={{textDecoration: t.completed ? 'line-through' : 'none', color: t.completed ? '#aaa' : '#333'}}>
+                      {t.title}
                     </span>
                   </div>
-                  <button style={styles.todoItemDelBtn} onClick={() => deleteTodo(todo._id)}>✕</button>
+                  <button style={styles.todoDelBtn} onClick={() => deleteTodo(t._id)}>삭제</button>
                 </div>
               ))}
-              {todoList.length === 0 && <p style={{textAlign:'center', color:'#aaa', marginTop:'20px'}}>할 일이 없습니다.</p>}
             </div>
           </div>
         </div>
@@ -318,12 +316,10 @@ const App = () => {
   );
 };
 
-// --- 스타일링 (Todo 스타일 추가) ---
+// --- Styles (Todo 스타일 추가됨) ---
 const styles = {
-  nav: { backgroundColor: '#fff', borderBottom: '1px solid #ddd', position: 'sticky', top: 0, zIndex: 1000 },
-  navInner: { maxWidth: '1000px', margin: '0 auto', padding: '0 20px', height: '60px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  navBtn: { background: 'none', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' },
-  
+  tabContainer: { display: 'flex', justifyContent: 'center', backgroundColor: '#fff', borderBottom: '1px solid #ddd' },
+  tabBtn: { padding: '15px 30px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px' },
   darkBg: { backgroundColor: '#111', minHeight: '100vh', padding: '60px 20px', color: '#fff' },
   listHeader: { display:'flex', justifyContent:'center', alignItems:'center', maxWidth:'1000px', margin:'0 auto 40px' },
   movieGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '30px', maxWidth: '1000px', margin: '0 auto' },
@@ -335,9 +331,8 @@ const styles = {
   hoverDesc: { color: '#ddd', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' },
   hoverReserveBtn: { backgroundColor: '#e71a0f', color: '#fff', border: 'none', padding: '10px 25px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' },
   movieInfo: { marginTop: '15px', textAlign: 'center' },
-  movieTitle: { fontSize: '18px', fontWeight: 'bold', color: '#fff' },
+  movieTitle: { fontSize: '18px', fontWeight: 'bold' },
   moviePrice: { fontSize: '14px', color: '#888' },
-
   seatContainer: { backgroundColor: '#000', minHeight: '100vh', color: '#fff' },
   seatHeader: { backgroundColor: '#fff', color: '#000', padding: '15px 30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   movieInfoMini: { display: 'flex', alignItems: 'center', gap: '10px' },
@@ -361,7 +356,6 @@ const styles = {
   priceLabel: { fontSize: '12px', color: '#888' },
   priceNum: { color: '#e71a0f', fontSize: '24px', fontWeight: 'bold' },
   payBtn: { backgroundColor: '#e71a0f', color: '#fff', border: 'none', padding: '12px 50px', fontSize: '18px', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' },
-
   lightBg: { backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '50px 20px', color: '#333' },
   historyHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: '800px', margin: '0 auto 30px' },
   historyCard: { display: 'flex', gap: '20px', maxWidth: '800px', margin: '0 auto 15px', backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
@@ -373,16 +367,15 @@ const styles = {
   cancelBadge: { backgroundColor: '#ff4d4d', color: '#fff', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' },
   textBtn: { background: 'none', border: 'none', color: '#e71a0f', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' },
   deleteBtn: { backgroundColor: '#333', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' },
-
-  // --- Todo 관련 스타일 ---
-  todoContainer: { padding: '40px 20px', display: 'flex', justifyContent: 'center' },
-  todoCard: { backgroundColor: '#fff', padding: '30px', borderRadius: '15px', width: '100%', maxWidth: '500px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)' },
-  todoInputGroup: { display: 'flex', gap: '10px', marginBottom: '25px' },
-  todoInput: { flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #ddd', outline: 'none' },
-  todoAddBtn: { backgroundColor: '#333', color: '#fff', border: 'none', padding: '0 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' },
+  // Todo전 전용 스타일
+  todoBg: { backgroundColor: '#eee', minHeight: '100vh', padding: '40px 20px' },
+  todoCard: { maxWidth: '500px', margin: '0 auto', backgroundColor: '#fff', padding: '25px', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' },
+  todoInputBox: { display: 'flex', gap: '10px', marginBottom: '20px' },
+  todoInput: { flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #ddd' },
+  todoAddBtn: { backgroundColor: '#333', color: '#fff', padding: '0 20px', border: 'none', borderRadius: '8px', cursor: 'pointer' },
   todoList: { display: 'flex', flexDirection: 'column', gap: '10px' },
-  todoItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: '#f9f9f9', borderRadius: '8px' },
-  todoItemDelBtn: { background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '16px' }
+  todoItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #eee' },
+  todoDelBtn: { background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer', fontSize: '12px' }
 };
 
 export default App;
