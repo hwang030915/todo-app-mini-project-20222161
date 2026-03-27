@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import myPosterImage1 from './assets/SE1.jpg';
-import myPosterImage2 from './assets/SE2.jpg'
-import myPosterImage3 from './assets/SE3.jpg'
-import myPosterImage4 from './assets/SE4.jpg'
-// 백엔드 주소 (로컬: http://localhost:5000/api/todos)
+import myPosterImage2 from './assets/SE2.jpg';
+import myPosterImage3 from './assets/SE3.jpg';
+import myPosterImage4 from './assets/SE4.jpg';
+
+// 백엔드 주소 설정 (Vercel 배포 시 /api/todos가 백엔드로 프록시되어야 함)
 const API_URL = '/api/todos';
 
 const MOVIES = [
@@ -20,6 +21,7 @@ const App = () => {
   const [myReservations, setMyReservations] = useState([]);
   const [counts, setCounts] = useState({ professor: 0, p_student: 0, colleger: 0 });
   const [selectedSeats, setSelectedSeats] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false); // 결제 중 상태 추가
 
   // 1. GET: 데이터 불러오기
   const fetchHistory = async () => {
@@ -50,9 +52,11 @@ const App = () => {
       .flatMap(res => safeParse(res.title)?.seats || []);
   };
 
-// 2. POST: 예매하기
+  // 2. POST: 예매하기 (핵심 수정 부분)
   const handlePayment = async () => {
-    // 1. 데이터 준비
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
     const info = {
       movieTitle: selectedMovie.title,
       poster: selectedMovie.poster,
@@ -61,35 +65,31 @@ const App = () => {
       price: totalPrice,
       date: new Date().toLocaleString()
     };
-    
+
     try {
-      // 2. 서버에 전송 (백엔드에서 title과 completed를 받으므로 구조를 맞춤)
       const res = await axios.post(API_URL, { 
         title: JSON.stringify(info), 
         completed: false 
       });
-      
-      // 3. 응답이 왔다면 상태 업데이트 및 화면 전환
-      // axios는 기본적으로 2xx가 아니면 catch로 던지므로 res가 존재하면 성공으로 간주해도 무방합니다.
+
       if (res.data) {
-        setMyReservations(prev => [res.data, ...prev]); 
-        alert("예매가 완료되었습니다! 🎉");
-        
-        // 중요: 상태 초기화 후 화면 이동
+        setMyReservations(prev => [res.data, ...prev]);
         setCounts({ professor: 0, p_student: 0, colleger: 0 });
         setSelectedSeats([]);
-        setView('history'); 
+        // 성공 시 즉시 이동
+        setView('history');
+        setTimeout(() => alert("예매가 완료되었습니다! 🎉"), 100);
       }
-    } catch (err) { 
-      // 로컬/배포 환경 어디서든 에러가 나면 여기서 잡힙니다.
-      console.error("상세 에러 내용:", err.response?.data || err.message);
-      
-      // 에러가 나더라도 화면을 넘기고 싶다면 아래 주석을 해제하세요 (디버깅용)
-      // setView('history'); 
-      
-      alert("서버 통신에 문제가 발생했습니다. (데이터베이스 연결이나 IP 허용을 확인해주세요)"); 
+    } catch (err) {
+      console.error("결제 에러:", err);
+      // 🔥 핵심: 에러가 나더라도 사용자 흐름이 끊기지 않게 내역 페이지로 강제 이동 시킵니다.
+      alert("서버 연결이 불안정하여 내역 페이지로 이동합니다.");
+      setView('history');
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
   // 3. PUT: 취소하기
   const cancelReservation = async (id) => {
     if (!window.confirm("예매를 취소하시겠습니까?")) return;
@@ -108,21 +108,33 @@ const App = () => {
     } catch (err) { alert("삭제 실패"); }
   };
 
-  // --- UI Components ---
+  // --- 내부 컴포넌트: MovieCard (App 안에서 정의해도 되지만 간결함을 위해 유지) ---
   const MovieCard = ({ movie }) => {
     const [isHover, setIsHover] = useState(false);
     return (
-      <div style={styles.movieCard} onMouseEnter={() => setIsHover(true)} onMouseLeave={() => setIsHover(false)} 
-           onClick={() => { setSelectedMovie(movie); setCounts({professor:0,p_student:0,colleger:0}); setSelectedSeats([]); setView('seat'); }}>
+      <div 
+        style={styles.movieCard} 
+        onMouseEnter={() => setIsHover(true)} 
+        onMouseLeave={() => setIsHover(false)} 
+        onClick={() => { 
+          setSelectedMovie(movie); 
+          setCounts({professor:0, p_student:0, colleger:0}); 
+          setSelectedSeats([]); 
+          setView('seat'); 
+        }}
+      >
         <div style={styles.posterWrapper}>
           <img src={movie.poster} alt={movie.title} style={{...styles.posterImg, transform: isHover ? 'scale(1.05)' : 'scale(1)'}} />
           <span style={{...styles.ageBadge, backgroundColor: movie.age === 'All' ? '#2ecc71' : '#fbba00'}}>{movie.age}</span>
-          <div style={{...styles.hoverOverlay, opacity: isHover ? 1 : 0}}>
+          <div style={{...styles.hoverOverlay, opacity: isHover ? 1 : 0, pointerEvents: 'none'}}>
             <p style={styles.hoverDesc}>{movie.desc}</p>
             <button style={styles.hoverReserveBtn}>예매하기</button>
           </div>
         </div>
-        <div style={styles.movieInfo}><h3 style={styles.movieTitle}>{movie.title}</h3><p style={styles.moviePrice}>15,000원 ~</p></div>
+        <div style={styles.movieInfo}>
+          <h3 style={styles.movieTitle}>{movie.title}</h3>
+          <p style={styles.moviePrice}>15,000원 ~</p>
+        </div>
       </div>
     );
   };
@@ -136,7 +148,9 @@ const App = () => {
             <h2 style={{fontSize: '32px', margin: 0}}>🎬 BOX OFFICE</h2>
             <button style={styles.historyNavBtn} onClick={() => setView('history')}>나의 예매내역 🎫</button>
           </header>
-          <div style={styles.movieGrid}>{MOVIES.map(m => <MovieCard key={m.id} movie={m} />)}</div>
+          <div style={styles.movieGrid}>
+            {MOVIES.map(m => <MovieCard key={m.id} movie={m} />)}
+          </div>
         </div>
       )}
 
@@ -144,65 +158,96 @@ const App = () => {
       {view === 'seat' && (
         <div style={styles.seatContainer}>
           <header style={styles.seatHeader}>
-            <div style={styles.movieInfoMini}><span style={styles.ageBadgeSmall}>{selectedMovie?.age}</span><strong>{selectedMovie?.title}</strong></div>
+            <div style={styles.movieInfoMini}>
+              <span style={styles.ageBadgeSmall}>{selectedMovie?.age}</span>
+              <strong>{selectedMovie?.title}</strong>
+            </div>
             <button style={styles.closeBtn} onClick={() => setView('movie')}>✕</button>
           </header>
+          
           <div style={styles.countSelectionArea}>
             {['professor', 'p_student', 'colleger'].map(t => (
               <div key={t} style={styles.countBox}>
                 <span style={styles.countLabel}>{t === 'professor' ? '교수님' : t === 'p_student' ? '대학원생' : '대학생'}</span>
                 <div style={styles.counter}>
-                  <button style={styles.countBtn} onClick={() => {const n = Math.max(0, counts[t]-1); setCounts({...counts, [t]:n}); if(selectedSeats.length > (totalPeople-1)) setSelectedSeats([]);}}>-</button>
+                  <button style={styles.countBtn} onClick={() => {
+                    const n = Math.max(0, counts[t]-1); 
+                    setCounts({...counts, [t]:n}); 
+                    if(selectedSeats.length > (totalPeople-1)) setSelectedSeats([]);
+                  }}>-</button>
                   <span style={styles.countNum}>{counts[t]}</span>
                   <button style={styles.countBtn} onClick={() => setCounts({...counts, [t]:counts[t]+1})}>+</button>
                 </div>
               </div>
             ))}
           </div>
+
           <div style={styles.screenArea}><div style={styles.screenLine}>SCREEN</div></div>
+          
           <div style={styles.seatGrid}>
             {['A', 'B', 'C'].map(row => (
               <div key={row} style={styles.seatRow}>
                 <span style={styles.rowLabel}>{row}</span>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(col => {
                   const sid = `${row}${col}`, isS = selectedSeats.includes(sid), isR = getReservedSeats().includes(sid);
-                  return <div key={col} onClick={() => { if(isR) return; if(isS) setSelectedSeats(selectedSeats.filter(s=>s!==sid)); else if(selectedSeats.length < totalPeople) setSelectedSeats([...selectedSeats, sid]);}}
-                          style={{...styles.seatIcon, backgroundColor: isR ? '#555' : (isS ? '#e71a0f' : '#333'), cursor: isR ? 'default' : 'pointer'}}>{col}</div>;
+                  return (
+                    <div 
+                      key={col} 
+                      onClick={() => { 
+                        if(isR) return; 
+                        if(isS) setSelectedSeats(selectedSeats.filter(s=>s!==sid)); 
+                        else if(selectedSeats.length < totalPeople) setSelectedSeats([...selectedSeats, sid]);
+                      }}
+                      style={{...styles.seatIcon, backgroundColor: isR ? '#555' : (isS ? '#e71a0f' : '#333'), cursor: isR ? 'default' : 'pointer'}}
+                    >
+                      {col}
+                    </div>
+                  );
                 })}
               </div>
             ))}
           </div>
+
           <footer style={styles.paymentBar}>
             <div style={styles.paymentInner}>
-              <div style={styles.priceContainer}><span style={styles.priceLabel}>좌석: {selectedSeats.join(', ') || '미선택'}</span><span style={styles.priceNum}>{totalPrice.toLocaleString()}원</span></div>
-              <button style={{...styles.payBtn, opacity: (totalPeople > 0 && selectedSeats.length === totalPeople) ? 1 : 0.5}} disabled={!(totalPeople > 0 && selectedSeats.length === totalPeople)} onClick={handlePayment}>결제하기</button>
+              <div style={styles.priceContainer}>
+                <span style={styles.priceLabel}>좌석: {selectedSeats.join(', ') || '미선택'}</span>
+                <span style={styles.priceNum}>{totalPrice.toLocaleString()}원</span>
+              </div>
+              <button 
+                style={{
+                  ...styles.payBtn, 
+                  opacity: (totalPeople > 0 && selectedSeats.length === totalPeople && !isSubmitting) ? 1 : 0.5
+                }} 
+                disabled={!(totalPeople > 0 && selectedSeats.length === totalPeople) || isSubmitting} 
+                onClick={handlePayment}
+              >
+                {isSubmitting ? '처리 중...' : '결제하기'}
+              </button>
             </div>
           </footer>
         </div>
       )}
 
-      {/*3. 예매 내역 뷰 부분 찾기*/}
+      {/* 3. 예매 내역 뷰 */}
       {view === 'history' && (
         <div style={styles.lightBg}>
           <div style={styles.historyHeader}>
             <h2 style={{fontSize: '24px', margin: 0}}>
               나의 예매 내역 
               <span style={{color:'#e71a0f', marginLeft: '8px'}}>
-              {/* 🔥 핵심: 실제로 화면에 그려질(safeParse가 성공한) 데이터만 필터링해서 개수를 셉니다 */}
                 {myReservations.filter(res => safeParse(res.title) !== null).length}
               </span>
             </h2>
             <button style={styles.backBtn} onClick={() => setView('movie')}>영화 목록으로</button>
           </div>
 
-          {/* 실제 리스트 출력 부분 */}
           {myReservations.map(res => {
             const data = safeParse(res.title);
-            if(!data) return null; // 데이터가 이상하면 화면에 그리지 않음 (숫자에서도 제외됨)
-              
+            if(!data) return null;
             return (
               <div key={res._id} style={styles.historyCard}>
-                <img src={data.poster} style={styles.historyPoster} alt="p" />
+                <img src={data.poster} style={styles.historyPoster} alt="poster" />
                 <div style={styles.historyContent}>
                   <div style={styles.historyTitle}>
                     <span style={styles.ageBadgeSmall}>{data.age}</span> <strong>{data.movieTitle}</strong>
@@ -225,6 +270,7 @@ const App = () => {
   );
 };
 
+// --- Styles (동일) ---
 const styles = {
   darkBg: { backgroundColor: '#111', minHeight: '100vh', padding: '60px 20px', color: '#fff' },
   listHeader: { display:'flex', justifyContent:'space-between', alignItems:'center', maxWidth:'1000px', margin:'0 auto 40px' },
