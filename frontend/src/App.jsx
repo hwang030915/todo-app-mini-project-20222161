@@ -22,20 +22,34 @@ const App = () => {
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- [Todo 관련 상태] ---
   const [todos, setTodos] = useState([]);
   const [todoInput, setTodoInput] = useState('');
 
-  // 1. 데이터 불러오기 (영화 예매와 Todo 구분)
+  // JSON 여부를 확인하는 헬퍼 함수
+  const isJsonString = (str) => {
+    try {
+      const obj = JSON.parse(str);
+      return (obj && typeof obj === 'object' && obj.movieTitle); // 영화 정보 객체인지 확인
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const safeParse = (str) => {
+    try { return JSON.parse(str); } catch (e) { return null; }
+  };
+
+  // 1. 데이터 불러오기 (영화 예매와 Todo 완벽 분리)
   const fetchData = async () => {
     try {
       const res = await axios.get(API_URL);
-      // title 형식을 검사하여 영화 데이터와 일반 할 일을 분리
-      const movies = res.data.filter(item => item.title.trim().startsWith('{'));
-      const todoItems = res.data.filter(item => !item.title.trim().startsWith('{'));
       
-      setMyReservations(movies);
-      setTodos(todoItems);
+      // 서버 데이터를 두 그룹으로 엄격히 분리
+      const movieReservations = res.data.filter(item => isJsonString(item.title));
+      const pureTodos = res.data.filter(item => !isJsonString(item.title));
+      
+      setMyReservations(movieReservations);
+      setTodos(pureTodos);
     } catch (err) {
       console.error("데이터 로드 실패", err);
     }
@@ -46,23 +60,17 @@ const App = () => {
   const totalPeople = counts.professor + counts.p_student + counts.colleger;
   const totalPrice = (counts.professor * 15000) + (counts.p_student * 12000) + (counts.colleger * 8000);
 
-  const safeParse = (str) => {
-    try { return JSON.parse(str); } catch (e) { return null; }
-  };
-
   // --- [Todo CRUD 로직] ---
-
-  // 할 일 추가
   const handleAddTodo = async () => {
     if (!todoInput.trim()) return;
     try {
       const res = await axios.post(API_URL, { title: todoInput, completed: false });
+      // 영화 예매가 아닌 일반 할 일 목록(setTodos)에만 추가
       setTodos(prev => [res.data, ...prev]);
       setTodoInput('');
     } catch (err) { alert("등록 실패"); }
   };
 
-  // 할 일 상태 변경 (완료/미완료 토글)
   const toggleTodo = async (id, currentStatus) => {
     try {
       const res = await axios.put(`${API_URL}/${id}`, { completed: !currentStatus });
@@ -70,7 +78,6 @@ const App = () => {
     } catch (err) { alert("상태 변경 실패"); }
   };
 
-  // 할 일 삭제
   const deleteTodo = async (id) => {
     if (!window.confirm("이 할 일을 삭제하시겠습니까?")) return;
     try {
@@ -80,7 +87,6 @@ const App = () => {
   };
 
   // --- [영화 예매 로직] ---
-
   const getReservedSeats = () => {
     if (!selectedMovie) return [];
     return myReservations
@@ -106,6 +112,7 @@ const App = () => {
 
     try {
       const res = await axios.post(API_URL, { title: JSON.stringify(info), completed: false });
+      // 체크리스트(todos)가 아닌 예매 내역(setMyReservations)에만 추가
       setMyReservations(prev => [res.data, ...prev]);
       setCounts({ professor: 0, p_student: 0, colleger: 0 });
       setSelectedSeats([]);
@@ -134,7 +141,7 @@ const App = () => {
     } catch (err) { alert("삭제 실패"); }
   };
 
-  // 영화 카드 컴포넌트
+  // 영화 카드 컴포넌트 (동일)
   const MovieCard = ({ movie }) => {
     const [isHover, setIsHover] = useState(false);
     return (
@@ -185,7 +192,7 @@ const App = () => {
           <div style={styles.countSelectionArea}>
             {['professor', 'p_student', 'colleger'].map(t => (
               <div key={t} style={styles.countBox}>
-                <span>{t === 'professor' ? '교수' : t === 'p_student' ? '원생' : '학생'}</span>
+                <span>{t === 'professor' ? '교수' : t === 'p_student' ? '대학원생' : '대학생'}</span>
                 <div style={styles.counter}>
                   <button onClick={() => setCounts({...counts, [t]: Math.max(0, counts[t]-1)})}>-</button>
                   <span>{counts[t]}</span>
@@ -245,7 +252,7 @@ const App = () => {
         </div>
       )}
 
-      {/* 4. Todo List (상태변경 기능 강화) */}
+      {/* 4. Todo List (영화 예매 정보 제외) */}
       {view === 'todo' && (
         <div style={styles.todoBg}>
           <div style={styles.todoCard}>
@@ -278,7 +285,7 @@ const App = () => {
   );
 };
 
-// --- Styles ---
+// --- Styles (동일) ---
 const styles = {
   tabContainer: { display: 'flex', justifyContent: 'center', backgroundColor: '#fff', borderBottom: '1px solid #ddd', position: 'sticky', top: 0, zIndex: 100 },
   tabBtn: { padding: '15px 25px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' },
