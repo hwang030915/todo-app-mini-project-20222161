@@ -87,6 +87,82 @@
 
 ---
 
+본 프로젝트의 주요 UI 구성과 비즈니스 로직이 적용된 실행 화면입니다.
+
+<strong>1. 영화관 전용 체크리스트 (Todo CRUD)</strong>
+<table width="100%">
+<tr>
+<td width="50%"><img src="screenshot\todo 1.png" alt="체크리스트 메인"/></td>
+<td width="50%"><img src="screenshot\todo 2.png" alt="할 일 추가"/></td>
+</tr>
+<tr>
+<td><strong>[체크리스트 UI]</strong>
+
+
+순수 텍스트 기반의 할 일 데이터만 필터링하여 보여줍니다. 완료된 항목은 <code>line-through</code> 스타일과 체크박스 활성화를 통해 상태를 표시합니다.</td>
+<td><strong>[실시간 항목 추가]</strong>
+
+
+입력 폼에 내용을 기입하고 등록 시, Axios POST 요청을 통해 백엔드와 통신하며 리스트의 최상단에 언시프트(Unshift) 방식으로 추가됩니다.</td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="screenshot\todo 3.png" alt="삭제 확인 모달" width="80%"/></td>
+</tr>
+<tr>
+<td colspan="2"><strong>[데이터 삭제 안전장치]</strong>
+
+
+사용자의 실수로 인한 데이터 손실을 방지하기 위해 <code>window.confirm</code> 인터페이스를 활용한 삭제 재확인 로직을 적용했습니다.</td>
+</tr>
+</table>
+
+<strong>2. 영화 예매 및 좌석 선택 시스템</strong>
+<table width="100%">
+<tr>
+<td width="50%"><img src="screenshot\영화 1.png" alt="메인 영화 목록"/></td>
+<td width="50%"><img src="screenshot\영화 2.png" alt="좌석 선택 초기화면"/></td>
+</tr>
+<tr>
+<td><strong>[메인 BOX OFFICE]</strong>
+
+
+다크 모드 테마를 적용한 영화 목록 인터페이스입니다. 각 영화 카드는 Hover 애니메이션을 통해 상세 설명과 예매 버튼을 노출하며, 연령 제한 뱃지를 동적으로 렌더링합니다.</td>
+<td><strong>[실시간 좌석 선택 - 빈 좌석]</strong>
+
+
+선택한 영화의 좌석 배치도입니다. 상단에서 교수/대학원생/대학생 인원을 설정할 수 있으며, 인원수에 맞춰 하단 결제 버튼의 활성화 상태가 변경됩니다.</td>
+</tr>
+<tr>
+<td width="50%"><img src="screenshot\영화 3.png" alt="인원 선택 및 좌석 점유"/></td>
+<td width="50%"><img src="screenshot\영화 4.png" alt="결제 완료 알림"/></td>
+</tr>
+<tr>
+<td><strong>[인원별 요금 계산 및 좌석 선택]</strong>
+
+
+인원 타입에 따른 차등 요금을 실시간으로 합산하여 하단에 표시합니다. 좌석을 선택하면 강조 표시되며, 선택된 인원수와 일치해야만 결제 로직이 실행됩니다.</td>
+<td><strong>[결제 승인 및 데이터 저장]</strong>
+
+
+결제하기 클릭 시 DB에 JSON 직렬화된 데이터가 전송됩니다. 성공 응답을 받으면 Vercel 호스팅 환경에서 브라우저 Alert를 통해 완료 알림을 사용자에게 전달합니다.</td>
+</tr>
+</table>
+
+<strong>3. 예매 내역 관리 (나의 내역)</strong>
+<table width="100%">
+<tr>
+<td><img src="screenshot\영화 5.png" alt="예매 내역 리스트"/></td>
+</tr>
+<tr>
+<td><strong>[나의 예매 내역]</strong>
+
+
+DB로부터 불러온 사용자의 예매 데이터를 카드 형태로 시각화했습니다. 취소 버튼 클릭 시 해당 데이터의 상태값이 변경되어 UI에 실시간 반영되며, 완전히 삭제하는 기능을 포함하고 있습니다.</td>
+</tr>
+</table>
+
+---
+
 ## 3. 문제점 및 대응 방안 (Issues & Solutions)
 
 ### 3.1 [Troubleshooting] 인프라 및 배포 이슈
@@ -113,5 +189,5 @@
 <div align="right">
   <p><strong>제출자: 황왕석</strong></p>
   <p><strong>학번: 20222161</strong></p>
-  <p>제출일: 2026. 04. 10</p>
+  <p><strong>제출일: 2026. 04. 10</strong></p>
 </div>
